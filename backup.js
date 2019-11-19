@@ -8,8 +8,6 @@ const github = new GitHubApi()
 const requiredOptions = [
   "githubAccessToken",
   "s3BucketName",
-  "s3AccessKeyId",
-  "s3AccessSecretKey"
 ]
 
 module.exports = function(options) {
