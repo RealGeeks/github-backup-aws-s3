@@ -1,10 +1,9 @@
-const GitHubApi = require("github")
+const { Octokit } = require("@octokit/rest")
 const stream = require("stream")
 const request = require("request")
 const aws = require("aws-sdk")
 const Promise = require("bluebird")
 
-const github = new GitHubApi()
 const requiredOptions = [
   "githubAccessToken",
   "s3BucketName",
@@ -18,44 +17,30 @@ module.exports = function(options) {
     }
   })
 
+  const github = new Octokit({
+    auth: options.githubAccessToken
+  })
+
   function getAllRepos() {
     return new Promise((resolve, reject) => {
-      github.authenticate({
-        type: "token",
-        token: options.githubAccessToken
-      })
-
-      let repos = []
 
       if (options.mode === "organisation") {
         console.log("Running in Organisation mode")
-        github.repos.getForOrg(
-          { org: options.organisation, per_page: 100 },
-          handleReposResponse
-        )
+        github.paginate(github.repos.listForOrg, { org: options.organisation, per_page: 100 }).then(handleReposResponse)
       } else {
         // Assume get all repos current user has access to
         console.log("Running in User mode")
         github.repos.getAll({ per_page: 100 }, handleReposResponse)
       }
 
-      function handleReposResponse(err, res) {
-        if (err) {
-          reject(err)
-          return
-        }
-
-        repos = repos.concat(res["data"])
-        if (github.hasNextPage(res)) {
-          github.getNextPage(res, handleReposResponse)
-        } else {
-          resolve(repos)
-        }
+      function handleReposResponse(res) {
+        resolve(res)
       }
     })
   }
 
   function copyReposToS3(repos) {
+    console.log(repos)
     console.log("Found " + repos.length + " repos to backup")
     console.log("-------------------------------------------------")
 
@@ -71,12 +56,12 @@ module.exports = function(options) {
       const arhiveURL =
         "https://api.github.com/repos/" +
         repo.full_name +
-        "/tarball/master?access_token=" +
-        options.githubAccessToken
+        "/tarball/master"
       const requestOptions = {
         url: arhiveURL,
         headers: {
-          "User-Agent": "nodejs"
+          "User-Agent": "nodejs",
+	  "Authorization": "token " + options.githubAccessToken
         }
       }
 
